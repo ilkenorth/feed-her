@@ -25,10 +25,12 @@ func spawn_pieces():
 			var random_color = possible_colors.pick_random()
 			while match_at(column, row, random_color):
 				random_color = possible_colors.pick_random()
+			var random_type = "healthy" if random_color in [Color.GREEN, Color.BLUE] else "unhealthy"
 			var piece = piece_scene.instantiate()
 			add_child(piece)
 			piece.position = Vector2(column * offset, row * offset)
 			piece.get_node("Sprite2D").modulate = random_color
+			piece.piece_type = random_type
 			piece.column = column
 			piece.row = row
 			grid[column][row] = piece
@@ -76,8 +78,11 @@ func destroy_matches(matches: Array):
 		if piece not in unique_matches:
 			unique_matches.append(piece)
 	for piece in unique_matches:
+		print(piece.piece_type)
+		GameState.add_score(piece.piece_type)
 		grid[piece.column][piece.row] = null
-		piece.queue_free()
+		piece.pop()
+		print(GameState.nutrition_score)
 
 func apply_gravity():
 	for column in width:
@@ -93,10 +98,12 @@ func apply_gravity():
 				empty_row -= 1
 		for row in range(empty_row, -1, -1):
 			var random_color = possible_colors.pick_random()
+			var random_type = "healthy" if random_color in [Color.GREEN, Color.BLUE] else "unhealthy"
 			var piece = piece_scene.instantiate()
 			add_child(piece)
 			piece.position = Vector2(column * offset, (row - (empty_row + 1)) * offset)
 			piece.get_node("Sprite2D").modulate = random_color
+			piece.piece_type = random_type
 			piece.column = column
 			piece.row = row
 			grid[column][row] = piece
@@ -120,10 +127,7 @@ func swap_pieces(column, row, direction):
 			await get_tree().create_timer(0.3).timeout
 			var matches = find_matches()
 			if matches.size() > 0:
-				destroy_matches(matches)
-				if matches.size() > 0:
-					destroy_matches(matches)
-					apply_gravity()
+				await resolve_matches()
 			else:
 				grid[column][row] = first_piece
 				grid[new_col][new_row] = other_piece
@@ -133,3 +137,12 @@ func swap_pieces(column, row, direction):
 				other_piece.row = new_row
 				first_piece.move(Vector2(first_piece.column * offset, first_piece.row * offset))
 				other_piece.move(Vector2(other_piece.column * offset, other_piece.row * offset))
+
+func resolve_matches():
+	var matches = find_matches()
+	while matches.size() > 0:
+		destroy_matches(matches)
+		await get_tree().create_timer(0.2).timeout
+		apply_gravity()
+		await get_tree().create_timer(0.3).timeout
+		matches = find_matches()

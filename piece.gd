@@ -1,5 +1,6 @@
 extends Node2D
 
+var piece_type: String = "healthy"
 var column: int
 var row: int
 
@@ -38,3 +39,11 @@ func calculate_swipe():
 func move(target):
 	var tween = create_tween()
 	tween.tween_property(self, "position", target, 0.3)
+
+func pop():
+	var tween = create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(self, "scale", Vector2.ZERO, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+	tween.tween_property(self, "rotation", rotation + PI, 0.2)
+	tween.set_parallel(false)
+	tween.tween_callback(queue_free)
