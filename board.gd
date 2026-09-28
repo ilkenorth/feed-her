@@ -8,10 +8,15 @@ extends Node2D
 var possible_colors = [Color.RED, Color.GREEN, Color.BLUE, Color.YELLOW, Color.PURPLE, Color.ORANGE]
 
 var grid: Array = []
+var busy: bool = false
+var info_label: Label
+var character_box: ColorRect
+var character_label: Label
 
 func _ready():
 	make_2d_array()
 	spawn_pieces()
+	setup_ui()
 
 func make_2d_array():
 	for column in width:
@@ -78,11 +83,11 @@ func destroy_matches(matches: Array):
 		if piece not in unique_matches:
 			unique_matches.append(piece)
 	for piece in unique_matches:
-		print(piece.piece_type)
 		GameState.add_score(piece.piece_type)
 		grid[piece.column][piece.row] = null
 		piece.pop()
-		print(GameState.nutrition_score)
+	GameState.register_clears(unique_matches.size())
+	update_ui()
 
 func apply_gravity():
 	for column in width:
@@ -110,6 +115,9 @@ func apply_gravity():
 			piece.move(Vector2(column * offset, row * offset))
 
 func swap_pieces(column, row, direction):
+	if busy:
+		return
+	busy = true
 	var new_col = column + direction.x
 	var new_row = row + direction.y
 	if new_col >= 0 and new_col < width and new_row >= 0 and new_row < height:
@@ -137,6 +145,9 @@ func swap_pieces(column, row, direction):
 				other_piece.row = new_row
 				first_piece.move(Vector2(first_piece.column * offset, first_piece.row * offset))
 				other_piece.move(Vector2(other_piece.column * offset, other_piece.row * offset))
+	if not GameState.is_game_finished():
+		busy = false
+
 
 func resolve_matches():
 	var matches = find_matches()
@@ -146,3 +157,50 @@ func resolve_matches():
 		apply_gravity()
 		await get_tree().create_timer(0.3).timeout
 		matches = find_matches()
+	if GameState.is_level_complete():
+		await complete_level()
+
+func setup_ui():
+	var layer = CanvasLayer.new()
+	add_child(layer)
+	info_label = Label.new()
+	info_label.position = Vector2(20, 20)
+	info_label.add_theme_font_size_override("font_size", 24)
+	layer.add_child(info_label)
+	character_label = Label.new()
+	character_label.position = Vector2(40, 70)
+	character_label.add_theme_font_size_override("font_size", 20)
+	layer.add_child(character_label)
+	character_box = ColorRect.new()
+	character_box.position = Vector2(40, 130)
+	layer.add_child(character_box)
+	update_ui()
+
+func update_ui():
+	info_label.text = "Level " + str(GameState.current_level) + "  |  Cleared: " + str(GameState.pieces_cleared) + " / " + str(GameState.get_goal())
+	update_character()
+
+func clear_board():
+	for column in width:
+		for row in height:
+			if grid[column][row] != null:
+				grid[column][row].queue_free()
+				grid[column][row] = null
+
+func complete_level():
+	info_label.text = "Level " + str(GameState.current_level) + " completed!"
+	await get_tree().create_timer(1.5).timeout
+	GameState.next_level()
+	if GameState.is_game_finished():
+		info_label.text = "Game over (final will be here)"
+		return
+	clear_board()
+	spawn_pieces()
+	update_ui()
+
+func update_character():
+	var size_px = 60 + GameState.current_level * 15
+	character_box.size = Vector2(size_px, size_px)
+	var t = clampf((GameState.nutrition_score + 40) / 80.0, 0.0, 1.0)
+	character_box.color = Color.RED.lerp(Color.GREEN, t)
+	character_label.text = GameState.get_life_stage() + "\n" + GameState.get_health_state()
