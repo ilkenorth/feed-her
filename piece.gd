@@ -1,6 +1,7 @@
 extends Node2D
 
 var piece_type: String = "healthy"
+var special_type: String = "normal"
 var column: int
 var row: int
 

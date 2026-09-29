@@ -36,6 +36,7 @@ func spawn_pieces():
 			piece.position = Vector2(column * offset, row * offset)
 			piece.get_node("Sprite2D").modulate = random_color
 			piece.piece_type = random_type
+			piece.special_type = "normal"
 			piece.column = column
 			piece.row = row
 			grid[column][row] = piece
@@ -52,32 +53,44 @@ func match_at(column, row, color) -> bool:
 	return false
 
 func find_matches() -> Array:
-	var matches = []
+	var groups = []
+	var checked = []
 	for column in width:
 		for row in height:
 			var piece = grid[column][row]
-			if piece == null:
+			if piece == null or piece in checked:
 				continue
 			var color = piece.get_node("Sprite2D").modulate
-			if column < width - 2:
-				var p1 = grid[column + 1][row]
-				var p2 = grid[column + 2][row]
-				if p1 != null and p2 != null:
-					if p1.get_node("Sprite2D").modulate == color and p2.get_node("Sprite2D").modulate == color:
-						matches.append(piece)
-						matches.append(p1)
-						matches.append(p2)
-			if row < height - 2:
-				var p1 = grid[column][row + 1]
-				var p2 = grid[column][row + 2]
-				if p1 != null and p2 != null:
-					if p1.get_node("Sprite2D").modulate == color and p2.get_node("Sprite2D").modulate == color:
-						matches.append(piece)
-						matches.append(p1)
-						matches.append(p2)
-	return matches
+			var h_run = [piece]
+			var c = column + 1
+			while c < width and grid[c][row] != null and grid[c][row].get_node("Sprite2D").modulate == color:
+				h_run.append(grid[c][row])
+				c += 1
+			var v_run = [piece]
+			var r = row + 1
+			while r < height and grid[column][r] != null and grid[column][r].get_node("Sprite2D").modulate == color:
+				v_run.append(grid[column][r])
+				r += 1
+			if h_run.size() >= 3:
+				groups.append(h_run)
+				for p in h_run:
+					checked.append(p)
+			if v_run.size() >= 3:
+				groups.append(v_run)
+				for p in v_run:
+					checked.append(p)
+	return groups
 
-func destroy_matches(matches: Array):
+func destroy_matches(groups: Array):
+	for group in groups:
+		if group.size() >= 5:
+			trigger_gather(group)
+		elif group.size() == 4:
+			trigger_random_special(group)
+	var matches = []
+	for group in groups:
+		for piece in group:
+			matches.append(piece)
 	var unique_matches = []
 	for piece in matches:
 		if piece not in unique_matches:
@@ -109,6 +122,7 @@ func apply_gravity():
 			piece.position = Vector2(column * offset, (row - (empty_row + 1)) * offset)
 			piece.get_node("Sprite2D").modulate = random_color
 			piece.piece_type = random_type
+			piece.special_type = "normal"
 			piece.column = column
 			piece.row = row
 			grid[column][row] = piece
@@ -204,3 +218,22 @@ func update_character():
 	var t = clampf((GameState.nutrition_score + 40) / 80.0, 0.0, 1.0)
 	character_box.color = Color.RED.lerp(Color.GREEN, t)
 	character_label.text = GameState.get_life_stage() + "\n" + GameState.get_health_state()
+
+func trigger_gather(group: Array):
+	var color = group[0].get_node("Sprite2D").modulate
+	for column in width:
+		for row in height:
+			var piece = grid[column][row]
+			if piece != null and piece.get_node("Sprite2D").modulate == color and piece not in group:
+				group.append(piece)
+
+func trigger_random_special(group: Array):
+	var choice = ["flip_type", "wall"].pick_random()
+	if choice == "flip_type":
+		for column in width:
+			for row in height:
+				var piece = grid[column][row]
+				if piece != null:
+					piece.piece_type = "unhealthy" if piece.piece_type == "healthy" else "healthy"
+	elif choice == "wall":
+		print("wall tetiklendi (henüz uygulanmadı)")
