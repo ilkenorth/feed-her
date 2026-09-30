@@ -8,6 +8,7 @@ extends Node2D
 var possible_colors = [Color.RED, Color.GREEN, Color.BLUE, Color.YELLOW, Color.PURPLE, Color.ORANGE]
 
 var grid: Array = []
+var walls: Array = []
 var busy: bool = false
 var info_label: Label
 var character_box: ColorRect
@@ -16,13 +17,17 @@ var character_label: Label
 func _ready():
 	make_2d_array()
 	spawn_pieces()
+	if not has_possible_move():
+		shuffle_board()
 	setup_ui()
 
 func make_2d_array():
 	for column in width:
 		grid.append([])
+		walls.append([])
 		for row in height:
 			grid[column].append(null)
+			walls[column].append(0)
 
 func spawn_pieces():
 	for column in width:
@@ -52,33 +57,80 @@ func match_at(column, row, color) -> bool:
 				return true
 	return false
 
+func would_match_at(c1, r1, c2, r2) -> bool:
+	var color1 = grid[c1][r1].get_node("Sprite2D").modulate
+	var color2 = grid[c2][r2].get_node("Sprite2D").modulate
+	grid[c1][r1].get_node("Sprite2D").modulate = color2
+	grid[c2][r2].get_node("Sprite2D").modulate = color1
+	var matches = find_matches()
+	grid[c1][r1].get_node("Sprite2D").modulate = color1
+	grid[c2][r2].get_node("Sprite2D").modulate = color2
+	return matches.size() > 0
+
+func has_possible_move() -> bool:
+	for column in width:
+		for row in height:
+			if grid[column][row] == null or walls[column][row] > 0:
+				continue
+			if column < width - 1 and grid[column +1][row] != null and walls[column + 1][row] == 0:
+				if would_match_at(column, row, column + 1, row):
+					return true
+			if row < height - 1 and grid[column][row + 1] != null and walls[column][row + 1] == 0:
+				if would_match_at(column, row, column, row + 1):
+					return true
+	return false
+
+func shuffle_board():
+	var pieces = []
+	for column in width:
+		for row in height:
+			if grid[column][row] != null and walls[column][row] == 0:
+				pieces.append(grid[column][row])
+	var colors = []
+	for piece in pieces:
+		colors.append(piece.get_node("Sprite2D").modulate)
+	colors.shuffle()
+	for i in range(pieces.size()):
+		var piece = pieces[i]
+		var color = colors[i]
+		piece.get_node("Sprite2D").modulate = color
+		piece.piece_type = "healthy" if color in [Color.GREEN, Color.BLUE] else "unhealthy"
+	if not has_possible_move():
+		shuffle_board()
+		return
+	if find_matches().size() > 0:
+		await resolve_matches()
+
 func find_matches() -> Array:
 	var groups = []
-	var checked = []
+	var h_checked = []
+	var v_checked = []
 	for column in width:
 		for row in height:
 			var piece = grid[column][row]
-			if piece == null or piece in checked:
+			if piece == null:
 				continue
 			var color = piece.get_node("Sprite2D").modulate
-			var h_run = [piece]
-			var c = column + 1
-			while c < width and grid[c][row] != null and grid[c][row].get_node("Sprite2D").modulate == color:
-				h_run.append(grid[c][row])
-				c += 1
-			var v_run = [piece]
-			var r = row + 1
-			while r < height and grid[column][r] != null and grid[column][r].get_node("Sprite2D").modulate == color:
-				v_run.append(grid[column][r])
-				r += 1
-			if h_run.size() >= 3:
-				groups.append(h_run)
-				for p in h_run:
-					checked.append(p)
-			if v_run.size() >= 3:
-				groups.append(v_run)
-				for p in v_run:
-					checked.append(p)
+			if piece not in h_checked:
+				var h_run = [piece]
+				var c = column + 1
+				while c < width and grid[c][row] != null and grid[c][row].get_node("Sprite2D").modulate == color:
+					h_run.append(grid[c][row])
+					c += 1
+				if h_run.size() >= 3:
+					groups.append(h_run)
+					for p in h_run:
+						h_checked.append(p)
+			if piece not in v_checked:
+				var v_run = [piece]
+				var r = row + 1
+				while r < height and grid[column][r] != null and grid[column][r].get_node("Sprite2D").modulate == color:
+					v_run.append(grid[column][r])
+					r += 1
+				if v_run.size() >= 3:
+					groups.append(v_run)
+					for p in v_run:
+						v_checked.append(p)
 	return groups
 
 func destroy_matches(groups: Array):
@@ -106,15 +158,23 @@ func apply_gravity():
 	for column in width:
 		var empty_row = height - 1
 		for row in range(height - 1, -1, -1):
-			if grid[column][row] != null:
-				if row != empty_row:
-					var piece = grid[column][row]
-					grid[column][empty_row] = piece
-					grid[column][row] = null
-					piece.row = empty_row
-					piece.move(Vector2(piece.column * offset, piece.row * offset))
+			if grid[column][row] == null:
+				continue
+			if walls[column][row] > 0:
+				if empty_row > row:
+					empty_row = row
 				empty_row -= 1
+				continue
+			if row != empty_row:
+				var piece = grid[column][row]
+				grid[column][empty_row] = piece
+				grid[column][row] = null
+				piece.row = empty_row
+				piece.move(Vector2(piece.column * offset, piece.row * offset))
+			empty_row -= 1
 		for row in range(empty_row, -1, -1):
+			if walls[column][row] > 0:
+				continue
 			var random_color = possible_colors.pick_random()
 			var random_type = "healthy" if random_color in [Color.GREEN, Color.BLUE] else "unhealthy"
 			var piece = piece_scene.instantiate()
@@ -134,7 +194,7 @@ func swap_pieces(column, row, direction):
 	busy = true
 	var new_col = column + direction.x
 	var new_row = row + direction.y
-	if new_col >= 0 and new_col < width and new_row >= 0 and new_row < height:
+	if new_col >= 0 and new_col < width and new_row >= 0 and new_row < height and walls[column][row] == 0 and walls[new_col][new_row] == 0:
 		var first_piece = grid[column][row]
 		var other_piece = grid[new_col][new_row]
 		if first_piece != null and other_piece != null:
@@ -164,6 +224,12 @@ func swap_pieces(column, row, direction):
 
 
 func resolve_matches():
+	for column in width:
+		for row in height:
+			if walls[column][row] > 0:
+				walls[column][row] -= 1
+				if walls[column][row] == 0 and grid[column][row] != null:
+					grid[column][row].get_node("Sprite2D").modulate *= 2.0
 	var matches = find_matches()
 	while matches.size() > 0:
 		destroy_matches(matches)
@@ -173,6 +239,8 @@ func resolve_matches():
 		matches = find_matches()
 	if GameState.is_level_complete():
 		await complete_level()
+	elif not has_possible_move():
+		shuffle_board()
 
 func setup_ui():
 	var layer = CanvasLayer.new()
@@ -200,6 +268,7 @@ func clear_board():
 			if grid[column][row] != null:
 				grid[column][row].queue_free()
 				grid[column][row] = null
+			walls[column][row] = 0
 
 func complete_level():
 	info_label.text = "Level " + str(GameState.current_level) + " completed!"
@@ -230,10 +299,29 @@ func trigger_gather(group: Array):
 func trigger_random_special(group: Array):
 	var choice = ["flip_type", "wall"].pick_random()
 	if choice == "flip_type":
+		var healthy_colors = [Color.GREEN, Color.BLUE]
+		var unhealthy_colors = [Color.RED, Color.YELLOW, Color.PURPLE, Color.ORANGE]
 		for column in width:
 			for row in height:
 				var piece = grid[column][row]
-				if piece != null:
-					piece.piece_type = "unhealthy" if piece.piece_type == "healthy" else "healthy"
+				if piece != null and walls[column][row] == 0:
+					if piece.piece_type == "healthy":
+						piece.get_node("Sprite2D").modulate = unhealthy_colors.pick_random()
+						piece.piece_type = "unhealthy"
+					else:
+						piece.get_node("Sprite2D").modulate = healthy_colors.pick_random()
+						piece.piece_type = "healthy"
 	elif choice == "wall":
-		print("wall tetiklendi (henüz uygulanmadı)")
+		var valid_cells = []
+		for column in width:
+			for row in height:
+				if grid[column][row] != null and walls[column][row] == 0:
+					valid_cells.append(Vector2(column, row))
+		if valid_cells.size() > 0:
+			var cell = valid_cells.pick_random()
+			walls[cell.x][cell.y] = 5
+			grid[cell.x][cell.y].get_node("Sprite2D").modulate *= 0.5
+
+func _unhandled_input(event):
+	if event is InputEventKey and event.pressed and event.keycode == KEY_S:
+		await shuffle_board()
