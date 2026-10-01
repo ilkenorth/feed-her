@@ -42,6 +42,8 @@ func spawn_pieces():
 			piece.get_node("Sprite2D").modulate = random_color
 			piece.piece_type = random_type
 			piece.special_type = "normal"
+			if randf() < 0.02:
+				piece.mark_as_line_clear(randf() < 0.5)
 			piece.column = column
 			piece.row = row
 			grid[column][row] = piece
@@ -135,6 +137,14 @@ func find_matches() -> Array:
 
 func destroy_matches(groups: Array):
 	for group in groups:
+		var original_size = group.size()
+		if original_size >= 5:
+			trigger_gather(group)
+		elif original_size == 4:
+			trigger_random_special(group)
+		for piece in group.duplicate():
+			if piece.special_type == "line_clear":
+				trigger_line_clear(piece, group)
 		if group.size() >= 5:
 			trigger_gather(group)
 		elif group.size() == 4:
@@ -183,6 +193,8 @@ func apply_gravity():
 			piece.get_node("Sprite2D").modulate = random_color
 			piece.piece_type = random_type
 			piece.special_type = "normal"
+			if randf() < 0.02:
+				piece.mark_as_line_clear(randf() < 0.5)
 			piece.column = column
 			piece.row = row
 			grid[column][row] = piece
@@ -289,6 +301,7 @@ func update_character():
 	character_label.text = GameState.get_life_stage() + "\n" + GameState.get_health_state()
 
 func trigger_gather(group: Array):
+	print("gather çağrıldı, grup boyutu: ", group.size())
 	var color = group[0].get_node("Sprite2D").modulate
 	for column in width:
 		for row in height:
@@ -321,6 +334,19 @@ func trigger_random_special(group: Array):
 			var cell = valid_cells.pick_random()
 			walls[cell.x][cell.y] = 5
 			grid[cell.x][cell.y].get_node("Sprite2D").modulate *= 0.5
+
+func trigger_line_clear(piece, group: Array):
+	print("line_clear tetiklendi! Satır mı: ", piece.is_line_clear_row)
+	if piece.is_line_clear_row:
+		for column in width:
+			var p = grid[column][piece.row]
+			if p != null and p not in group:
+				group.append(p)
+	else:
+		for row in height:
+			var p = grid[piece.column][row]
+			if p != null and p not in group:
+				group.append(p)
 
 func _unhandled_input(event):
 	if event is InputEventKey and event.pressed and event.keycode == KEY_S:

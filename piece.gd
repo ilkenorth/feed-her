@@ -2,6 +2,7 @@ extends Node2D
 
 var piece_type: String = "healthy"
 var special_type: String = "normal"
+var is_line_clear_row: bool = false
 var column: int
 var row: int
 
@@ -48,3 +49,14 @@ func pop():
 	tween.tween_property(self, "rotation", rotation + PI, 0.2)
 	tween.set_parallel(false)
 	tween.tween_callback(queue_free)
+
+func mark_as_line_clear(is_row: bool):
+	special_type = "line_clear"
+	is_line_clear_row = is_row
+	get_node("Sprite2D").scale *= 1.3
+	var outline = ColorRect.new()
+	outline.color = Color.WHITE
+	outline.size = Vector2(4, 4)
+	outline.position = Vector2(-2, -2)
+	outline.z_index = 1
+	add_child(outline)
