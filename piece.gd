@@ -3,6 +3,8 @@ extends Node2D
 var piece_type: String = "healthy"
 var special_type: String = "normal"
 var is_line_clear_row: bool = false
+var is_fate_piece: bool = false
+var fate_is_good: bool = false
 var column: int
 var row: int
 
@@ -60,3 +62,15 @@ func mark_as_line_clear(is_row: bool):
 	outline.position = Vector2(-2, -2)
 	outline.z_index = 1
 	add_child(outline)
+
+func mark_as_fate(is_good: bool):
+	special_type = "fate"
+	is_fate_piece = true
+	fate_is_good = is_good
+	var glow = ColorRect.new()
+	glow.color = Color.GOLD if is_good else Color.BLACK
+	glow.size = Vector2(6, 6)
+	glow.position = Vector2(-3, -3)
+	glow.z_index = 2
+	add_child(glow)
+	get_node("Sprite2D").scale *= 1.5

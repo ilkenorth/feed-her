@@ -10,6 +10,7 @@ var possible_colors = [Color.RED, Color.GREEN, Color.BLUE, Color.YELLOW, Color.P
 var grid: Array = []
 var walls: Array = []
 var busy: bool = false
+var game_over: bool = false
 var info_label: Label
 var character_box: ColorRect
 var character_label: Label
@@ -44,6 +45,8 @@ func spawn_pieces():
 			piece.special_type = "normal"
 			if randf() < 0.02:
 				piece.mark_as_line_clear(randf() < 0.5)
+			elif randf() < 0.002:
+				piece.mark_as_fate(randf() < 0.5)
 			piece.column = column
 			piece.row = row
 			grid[column][row] = piece
@@ -145,10 +148,8 @@ func destroy_matches(groups: Array):
 		for piece in group.duplicate():
 			if piece.special_type == "line_clear":
 				trigger_line_clear(piece, group)
-		if group.size() >= 5:
-			trigger_gather(group)
-		elif group.size() == 4:
-			trigger_random_special(group)
+			elif piece.special_type == "fate":
+				trigger_fate(piece)
 	var matches = []
 	for group in groups:
 		for piece in group:
@@ -195,6 +196,8 @@ func apply_gravity():
 			piece.special_type = "normal"
 			if randf() < 0.02:
 				piece.mark_as_line_clear(randf() < 0.5)
+			elif randf() < 0.002:
+				piece.mark_as_fate(randf() < 0.5)
 			piece.column = column
 			piece.row = row
 			grid[column][row] = piece
@@ -231,7 +234,7 @@ func swap_pieces(column, row, direction):
 				other_piece.row = new_row
 				first_piece.move(Vector2(first_piece.column * offset, first_piece.row * offset))
 				other_piece.move(Vector2(other_piece.column * offset, other_piece.row * offset))
-	if not GameState.is_game_finished():
+	if not GameState.is_game_finished() and not game_over:
 		busy = false
 
 
@@ -249,10 +252,12 @@ func resolve_matches():
 		apply_gravity()
 		await get_tree().create_timer(0.3).timeout
 		matches = find_matches()
+	if game_over:
+		return
 	if GameState.is_level_complete():
 		await complete_level()
 	elif not has_possible_move():
-		shuffle_board()
+		await shuffle_board()
 
 func setup_ui():
 	var layer = CanvasLayer.new()
@@ -271,6 +276,8 @@ func setup_ui():
 	update_ui()
 
 func update_ui():
+	if game_over:
+		return
 	info_label.text = "Level " + str(GameState.current_level) + "  |  Cleared: " + str(GameState.pieces_cleared) + " / " + str(GameState.get_goal())
 	update_character()
 
@@ -347,6 +354,18 @@ func trigger_line_clear(piece, group: Array):
 			var p = grid[piece.column][row]
 			if p != null and p not in group:
 				group.append(p)
+
+func trigger_fate(piece):
+	game_over = true
+	busy = true
+	character_label.visible = false
+	character_box.visible = false
+	if piece.fate_is_good:
+		info_label.text = "Something good happened... (Buraya hikaye metni gelecek)"
+	else:
+		info_label.text = "Something bad happened... (Buraya hikaye metni gelecek)"
+	await get_tree().create_timer(2.0).timeout
+	info_label.text += "\n\nOyun bitti."
 
 func _unhandled_input(event):
 	if event is InputEventKey and event.pressed and event.keycode == KEY_S:
