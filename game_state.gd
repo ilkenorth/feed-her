@@ -57,3 +57,8 @@ func get_life_stage() -> String:
 		return "Teen"
 	else:
 		return "Adult"
+
+func reset_game():
+	current_level = 1
+	pieces_cleared = 0
+	nutrition_score = 0

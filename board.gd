@@ -294,11 +294,20 @@ func complete_level():
 	await get_tree().create_timer(1.5).timeout
 	GameState.next_level()
 	if GameState.is_game_finished():
-		info_label.text = "Game over (final will be here)"
+		show_final_scene()
 		return
 	clear_board()
 	spawn_pieces()
 	update_ui()
+
+func show_final_scene():
+	game_over = true
+	busy = true
+	character_label.visible = false
+	character_box.visible = false
+	clear_board()
+	info_label.text = "10 yıl sonra...\n\n(buraya final metni gelecek - oyuncunun healthy/unhealthy oranına bakılmaksızın sabit, acı bir son)"
+	show_return_button()
 
 func update_character():
 	var size_px = 60 + GameState.current_level * 15
@@ -366,6 +375,18 @@ func trigger_fate(piece):
 		info_label.text = "Something bad happened... (Buraya hikaye metni gelecek)"
 	await get_tree().create_timer(2.0).timeout
 	info_label.text += "\n\nOyun bitti."
+	show_return_button()
+
+func show_return_button():
+		var button = Button.new()
+		button.text = "Ana Menüye Dön"
+		button.position = Vector2(40, 200)
+		info_label.get_parent().add_child(button)
+		button.pressed.connect(_on_return_pressed)
+
+func _on_return_pressed():
+	GameState.reset_game()
+	get_tree().change_scene_to_file("res://MainMenu.tscn")
 
 func _unhandled_input(event):
 	if event is InputEventKey and event.pressed and event.keycode == KEY_S:
