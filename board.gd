@@ -16,6 +16,13 @@ var character_box: ColorRect
 var character_label: Label
 
 func _ready():
+	var screen_size = Vector2(720, 1280)
+	var board_width_px = width * offset
+	var board_height_px = height * offset
+	position = Vector2(
+		(screen_size.x - board_width_px) / 2 + offset / 2,
+		(screen_size.y - board_height_px) / 2 + offset / 2 + 150
+	)
 	make_2d_array()
 	spawn_pieces()
 	if not has_possible_move():
