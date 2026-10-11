@@ -12,6 +12,13 @@ var first_touch = Vector2(0, 0)
 var final_touch = Vector2(0, 0)
 var controlling = false
 
+const ARROW_TEX = preload("res://assets/sprites/special_piece_arrow.png")
+const WALL_TEX = preload("res://assets/sprites/special_piece_wall.png")
+const GOOD_TEX = preload("res://assets/sprites/ending_piece_good.png")
+const BAD_TEX = preload("res://assets/sprites/ending_piece_bad.png")
+
+var wall_overlay: Sprite2D
+
 func _on_area_2d_input_event(viewport, event, shape_idx):
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 		first_touch = get_global_mouse_position()
@@ -52,25 +59,30 @@ func pop():
 	tween.set_parallel(false)
 	tween.tween_callback(queue_free)
 
+func make_overlay(tex: Texture2D) -> Sprite2D:
+	var overlay = Sprite2D.new()
+	overlay.texture = tex
+	overlay.scale = Vector2(2, 2)
+	add_child(overlay)
+	return overlay
+
 func mark_as_line_clear(is_row: bool):
 	special_type = "line_clear"
 	is_line_clear_row = is_row
-	get_node("Sprite2D").scale *= 1.3
-	var outline = ColorRect.new()
-	outline.color = Color.WHITE
-	outline.size = Vector2(4, 4)
-	outline.position = Vector2(-2, -2)
-	outline.z_index = 1
-	add_child(outline)
+	var overlay = make_overlay(ARROW_TEX)
+	if not is_row:
+		overlay.rotation_degrees = 90
 
 func mark_as_fate(is_good: bool):
 	special_type = "fate"
 	is_fate_piece = true
 	fate_is_good = is_good
-	var glow = ColorRect.new()
-	glow.color = Color.GOLD if is_good else Color.BLACK
-	glow.size = Vector2(6, 6)
-	glow.position = Vector2(-3, -3)
-	glow.z_index = 2
-	add_child(glow)
-	get_node("Sprite2D").scale *= 1.5
+	make_overlay(GOOD_TEX if is_good else BAD_TEX)
+
+func show_wall():
+	wall_overlay = make_overlay(WALL_TEX)
+
+func hide_wall():
+	if wall_overlay != null:
+		wall_overlay.queue_free()
+		wall_overlay = null

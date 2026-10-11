@@ -6,6 +6,14 @@ extends Node2D
 @export var piece_scene: PackedScene
 
 var possible_colors = [Color.RED, Color.GREEN, Color.BLUE, Color.YELLOW, Color.PURPLE, Color.ORANGE]
+var piece_textures = {
+	Color.GREEN: preload("res://assets/sprites/piece_formula.png"),
+	Color.BLUE: preload("res://assets/sprites/piece_milk.png"),
+	Color.RED: preload("res://assets/sprites/piece_knife.png"),
+	Color.YELLOW: preload("res://assets/sprites/piece_coke.png"),
+	Color.ORANGE: preload("res://assets/sprites/piece_candy.png"),
+	Color.PURPLE: preload("res://assets/sprites/piece_bleach.png"),
+}
 
 var grid: Array = []
 var walls: Array = []
@@ -48,6 +56,7 @@ func spawn_pieces():
 			add_child(piece)
 			piece.position = Vector2(column * offset, row * offset)
 			piece.get_node("Sprite2D").modulate = random_color
+			piece.get_node("Sprite2D").texture = piece_textures[random_color]
 			piece.piece_type = random_type
 			piece.special_type = "normal"
 			if randf() < 0.02:
@@ -106,6 +115,7 @@ func shuffle_board():
 		var piece = pieces[i]
 		var color = colors[i]
 		piece.get_node("Sprite2D").modulate = color
+		piece.get_node("Sprite2D").texture = piece_textures[color]
 		piece.piece_type = "healthy" if color in [Color.GREEN, Color.BLUE] else "unhealthy"
 	if not has_possible_move():
 		shuffle_board()
@@ -120,13 +130,13 @@ func find_matches() -> Array:
 	for column in width:
 		for row in height:
 			var piece = grid[column][row]
-			if piece == null:
+			if piece == null or walls[column][row] > 0:
 				continue
 			var color = piece.get_node("Sprite2D").modulate
 			if piece not in h_checked:
 				var h_run = [piece]
 				var c = column + 1
-				while c < width and grid[c][row] != null and grid[c][row].get_node("Sprite2D").modulate == color:
+				while c < width and grid[c][row] != null and walls[c][row] == 0 and grid[c][row].get_node("Sprite2D").modulate == color:
 					h_run.append(grid[c][row])
 					c += 1
 				if h_run.size() >= 3:
@@ -136,7 +146,7 @@ func find_matches() -> Array:
 			if piece not in v_checked:
 				var v_run = [piece]
 				var r = row + 1
-				while r < height and grid[column][r] != null and grid[column][r].get_node("Sprite2D").modulate == color:
+				while r < height and grid[column][r] != null and walls[column][r] == 0 and grid[column][r].get_node("Sprite2D").modulate == color:
 					v_run.append(grid[column][r])
 					r += 1
 				if v_run.size() >= 3:
@@ -167,6 +177,7 @@ func destroy_matches(groups: Array):
 			unique_matches.append(piece)
 	for piece in unique_matches:
 		GameState.add_score(piece.piece_type)
+		walls[piece.column][piece.row] = 0
 		grid[piece.column][piece.row] = null
 		piece.pop()
 	GameState.register_clears(unique_matches.size())
@@ -199,6 +210,7 @@ func apply_gravity():
 			add_child(piece)
 			piece.position = Vector2(column * offset, (row - (empty_row + 1)) * offset)
 			piece.get_node("Sprite2D").modulate = random_color
+			piece.get_node("Sprite2D").texture = piece_textures[random_color]
 			piece.piece_type = random_type
 			piece.special_type = "normal"
 			if randf() < 0.02:
@@ -251,7 +263,7 @@ func resolve_matches():
 			if walls[column][row] > 0:
 				walls[column][row] -= 1
 				if walls[column][row] == 0 and grid[column][row] != null:
-					grid[column][row].get_node("Sprite2D").modulate *= 2.0
+					grid[column][row].hide_wall()
 	var matches = find_matches()
 	while matches.size() > 0:
 		destroy_matches(matches)
@@ -324,12 +336,11 @@ func update_character():
 	character_label.text = GameState.get_life_stage() + "\n" + GameState.get_health_state()
 
 func trigger_gather(group: Array):
-	print("gather çağrıldı, grup boyutu: ", group.size())
 	var color = group[0].get_node("Sprite2D").modulate
 	for column in width:
 		for row in height:
 			var piece = grid[column][row]
-			if piece != null and piece.get_node("Sprite2D").modulate == color and piece not in group:
+			if piece != null and walls[column][row] == 0 and piece.get_node("Sprite2D").modulate == color and piece not in group:
 				group.append(piece)
 
 func trigger_random_special(group: Array):
@@ -342,33 +353,36 @@ func trigger_random_special(group: Array):
 				var piece = grid[column][row]
 				if piece != null and walls[column][row] == 0:
 					if piece.piece_type == "healthy":
-						piece.get_node("Sprite2D").modulate = unhealthy_colors.pick_random()
+						var new_color = unhealthy_colors.pick_random()
+						piece.get_node("Sprite2D").modulate = new_color
+						piece.get_node("Sprite2D").texture = piece_textures[new_color]
 						piece.piece_type = "unhealthy"
 					else:
-						piece.get_node("Sprite2D").modulate = healthy_colors.pick_random()
+						var new_color = healthy_colors.pick_random()
+						piece.get_node("Sprite2D").modulate = new_color
+						piece.get_node("Sprite2D").texture = piece_textures[new_color]
 						piece.piece_type = "healthy"
 	elif choice == "wall":
 		var valid_cells = []
 		for column in width:
 			for row in height:
-				if grid[column][row] != null and walls[column][row] == 0:
+				if grid[column][row] != null and walls[column][row] == 0 and grid[column][row] not in group:
 					valid_cells.append(Vector2(column, row))
 		if valid_cells.size() > 0:
 			var cell = valid_cells.pick_random()
 			walls[cell.x][cell.y] = 5
-			grid[cell.x][cell.y].get_node("Sprite2D").modulate *= 0.5
+			grid[cell.x][cell.y].show_wall()
 
 func trigger_line_clear(piece, group: Array):
-	print("line_clear tetiklendi! Satır mı: ", piece.is_line_clear_row)
 	if piece.is_line_clear_row:
 		for column in width:
 			var p = grid[column][piece.row]
-			if p != null and p not in group:
+			if p != null and walls[column][piece.row] == 0 and p not in group:
 				group.append(p)
 	else:
 		for row in height:
 			var p = grid[piece.column][row]
-			if p != null and p not in group:
+			if p != null and walls[piece.column][row] == 0 and p not in group:
 				group.append(p)
 
 func trigger_fate(piece):
