@@ -48,6 +48,8 @@ func make_2d_array():
 func spawn_pieces():
 	for column in width:
 		for row in height:
+			if not is_active(column, row):
+				continue
 			var random_color = possible_colors.pick_random()
 			while match_at(column, row, random_color):
 				random_color = possible_colors.pick_random()
@@ -183,37 +185,51 @@ func destroy_matches(groups: Array):
 	GameState.register_clears(unique_matches.size())
 	update_ui()
 
+func next_free_above(column: int, from_row: int) -> int:
+	for r in range(from_row - 1, -1, -1):
+		if is_active(column, r) and walls[column][r] == 0 and grid[column][r] == null:
+			return r
+	return -1
+
 func apply_gravity():
 	for column in width:
-		var empty_row = height - 1
+		var empty_row = -1
 		for row in range(height - 1, -1, -1):
-			if grid[column][row] == null:
+			if not is_active(column, row):
 				continue
 			if walls[column][row] > 0:
-				if empty_row > row:
-					empty_row = row
-				empty_row -= 1
+				empty_row = -1
 				continue
-			if row != empty_row:
-				var piece = grid[column][row]
+			var piece = grid[column][row]
+			if piece == null:
+				if empty_row == -1:
+					empty_row = row
+			elif empty_row != -1:
 				grid[column][empty_row] = piece
 				grid[column][row] = null
 				piece.row = empty_row
 				piece.move(Vector2(piece.column * offset, piece.row * offset))
-			empty_row -= 1
-		for row in range(empty_row, -1, -1):
+				empty_row = next_free_above(column, empty_row)
+
+		var empty_cells = []
+		for row in height:
 			if walls[column][row] > 0:
-				continue
+				break
+			if is_active(column, row) and grid[column][row] == null:
+				empty_cells.append(row)
+
+		for i in empty_cells.size():
+			var row = empty_cells[i]
 			var random_color = possible_colors.pick_random()
 			var random_type = "healthy" if random_color in [Color.GREEN, Color.BLUE] else "unhealthy"
 			var piece = piece_scene.instantiate()
 			add_child(piece)
-			piece.position = Vector2(column * offset, (row - (empty_row + 1)) * offset)
+			piece.position = Vector2(column * offset, (i - empty_cells.size()) * offset)
 			piece.get_node("Sprite2D").modulate = random_color
 			piece.get_node("Sprite2D").texture = piece_textures[random_color]
 			piece.piece_type = random_type
 			piece.special_type = "normal"
-			if randf() < 0.02:
+			if randf() < 0.03:
 				piece.mark_as_line_clear(randf() < 0.5)
 			elif randf() < 0.002:
 				piece.mark_as_fate(randf() < 0.5)
@@ -317,6 +333,8 @@ func complete_level():
 		return
 	clear_board()
 	spawn_pieces()
+	if not has_possible_move():
+		await shuffle_board()
 	update_ui()
 
 func show_final_scene():
@@ -408,6 +426,9 @@ func show_return_button():
 func _on_return_pressed():
 	GameState.reset_game()
 	get_tree().change_scene_to_file("res://MainMenu.tscn")
+
+func is_active(column: int, row: int) -> bool:
+	return GameState.get_mask()[row][column] == "X"
 
 func _unhandled_input(event):
 	if event is InputEventKey and event.pressed and event.keycode == KEY_S:
